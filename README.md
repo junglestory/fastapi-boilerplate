@@ -1,0 +1,2 @@
+# fastapi-boilerplate
+fastsapi example
