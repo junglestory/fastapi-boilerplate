@@ -1,5 +1,6 @@
 from sqlalchemy import Column, String, Integer, TEXT, DATETIME
 from db.session import Base
+from sqlalchemy.sql import func
 
 class News(Base):
     __tablename__ = "news"
@@ -11,4 +12,4 @@ class News(Base):
     link_url = Column(String(200))  
     writer = Column(String(50))  
     content = Column(TEXT)  
-    reg_date = Column(DATETIME) 
+    reg_date = Column(DATETIME(timezone=True), default=func.now()) 
