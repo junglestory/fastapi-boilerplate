@@ -1,3 +1,4 @@
+from tkinter import E
 from fastapi import FastAPI, status
 from fastapi.params import Depends 
 from sqlalchemy.orm import Session
@@ -7,7 +8,7 @@ from pydantic import BaseModel, ValidationError
 from fastapi.encoders import jsonable_encoder
 
 class Item(BaseModel):
-    # seq: int
+    seq: int
     journal_id: str
     title:  str
     publish_date:  str
@@ -18,12 +19,11 @@ class Item(BaseModel):
         orm_mode = True
 
 
-def Response(data, code, message, error):
+def Response(status, message, data):
     return {
-        "data": data,
-        "code": code,
+        "status": status,
         "message": message,
-        "error": error
+        "data": data
     }
 
 
@@ -39,21 +39,32 @@ def hello(db: Session = Depends(get_db)):
 def get_news_all(db: Session = Depends(get_db)):
     datas = db.query(News).all()
 
-    return datas
+    status = True
+    message = "News retrieved successfully"
+
+    if len(datas) <= 0:
+        status = False
+        message = "News not found"
+
+    return Response(status, message, datas)
 
 
 @app.get("/news/{journal_id}")
 def get_news_journal(journal_id: str, db: Session = Depends(get_db)):    
     datas = db.query(News).filter(News.journal_id == journal_id).all()
 
-    return datas
+    status = True
+    message = "News retrieved successfully"
+
+    if len(datas) <= 0:
+        status = False
+        message = "News not found"
+
+    return Response(status, message, datas)
 
 
 @app.post("/news")
 def create_news(item: Item, db: Session = Depends(get_db)):
-    print(item)
-    data = ""
-    
     try:
         new_news = News()
         new_news.journal_id = item.journal_id
@@ -66,17 +77,21 @@ def create_news(item: Item, db: Session = Depends(get_db)):
         db.add(new_news)
         db.flush()
 
-        # get id of the inserted product
         db.refresh(new_news, attribute_names=['seq'])
         data = {"seq": new_news.seq}
         db.commit()
+
+        status = True
+        message = "News added successfully."
     except ValidationError as e:
-        print(e)
+        status = False
+        data = None
+        message = e
     
-    return Response(data, 200, "Product added successfully.", False)
+    return Response(status, message, data)
 
 
-@app.put("/news", status_code=status.HTTP_201_CREATED)
+@app.put("/news")
 def update_news(item: Item, db: Session = Depends(get_db)):
     try:
         is_updated = db.query(News).filter(News.seq == item.seq).update({
@@ -91,25 +106,44 @@ def update_news(item: Item, db: Session = Depends(get_db)):
         db.flush()
         db.commit()
 
-        response_msg = "Product updated successfully"
-        response_code = 200
-        error = False
+        status = True
+        message = "News updated successfully"        
 
         if is_updated == 1:
             data = db.query(News).filter(
                 News.seq == item.seq).one()
         elif is_updated == 0:
-            response_msg = "Product not updated. No product found with this id :" + \
+            message = "News not updated. No product found with this seq :" + \
                 str(item.seq)
-            error = True
+            status = False
             data = None
+    except Exception as e:
+        status = False
+        data = None
+        message = e
+        print("Error : ", e)
 
-        return Response(data, response_code, response_msg, error)
-    except Exception as ex:
-        print("Error : ", ex)
+    return Response(status, message, data)
 
 
 @app.delete("/news/{seq}")
 def delete_news(seq: int, db: Session = Depends(get_db)):
-    db.query(News).filter(News.seq == seq).delete()
-    db.commit()
+    data = None
+
+    try:
+        status = True
+        
+        is_deleted = db.query(News).filter(News.seq == seq).delete()
+        db.commit()
+
+        if is_deleted == 1:
+            message = "News deleted successfully"
+        else:
+            message = "News not updated. No product found with this seq :" + \
+                str(seq)    
+    except Exception as e:
+        status = False
+        message = e
+
+    return Response(status, message, data)
+
