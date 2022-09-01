@@ -1,22 +1,11 @@
-from tkinter import E
-from fastapi import FastAPI, status
+from fastapi import FastAPI
 from fastapi.params import Depends 
 from sqlalchemy.orm import Session
 from db.connection import get_db
+from pydantic import ValidationError
 from models import News
-from pydantic import BaseModel, ValidationError
-from fastapi.encoders import jsonable_encoder
-
-class Item(BaseModel):
-    seq: int
-    journal_id: str
-    title:  str
-    publish_date:  str
-    link_url: str
-    writer:  str
-    content: str
-    class Config:
-        orm_mode = True
+import schemas
+import logging
 
 
 def Response(status, message, data):
@@ -31,7 +20,7 @@ app = FastAPI()
 
 @app.get("/")
 def hello(db: Session = Depends(get_db)):
-    # logging.debug("hello world")
+    logging.debug("hello world")
     return {"Hello": "World"}
 
 
@@ -46,11 +35,15 @@ def get_news_all(db: Session = Depends(get_db)):
         status = False
         message = "News not found"
 
+    logging.info(message)
+    
     return Response(status, message, datas)
 
 
 @app.get("/news/{journal_id}")
-def get_news_journal(journal_id: str, db: Session = Depends(get_db)):    
+def get_news_by_journal_id(journal_id: str, db: Session = Depends(get_db)):    
+    logging.info("journal id : {}".format(journal_id))
+
     datas = db.query(News).filter(News.journal_id == journal_id).all()
 
     status = True
@@ -60,30 +53,37 @@ def get_news_journal(journal_id: str, db: Session = Depends(get_db)):
         status = False
         message = "News not found"
 
+    logging.info(message)
+
     return Response(status, message, datas)
 
 
 @app.post("/news")
-def create_news(item: Item, db: Session = Depends(get_db)):
+def create_news(item: schemas.Item, db: Session = Depends(get_db)):
     try:
-        new_news = News()
-        new_news.journal_id = item.journal_id
-        new_news.title =  item.title
-        new_news.publish_date =  item.publish_date
-        new_news.link_url =  item.link_url
-        new_news.writer =  item.writer
-        new_news.content =  item.content
+        logging.info(item)
+
+        news = News()
+        news.journal_id = item.journal_id
+        news.title =  item.title
+        news.publish_date =  item.publish_date
+        news.link_url =  item.link_url
+        news.writer =  item.writer
+        news.content =  item.content
         
-        db.add(new_news)
+        db.add(news)
         db.flush()
 
-        db.refresh(new_news, attribute_names=['seq'])
-        data = {"seq": new_news.seq}
+        db.refresh(news, attribute_names=['seq'])
+        data = {"seq": news.seq}
         db.commit()
 
         status = True
         message = "News added successfully."
+
+        logging.info(message)
     except ValidationError as e:
+        logging.error(e)
         status = False
         data = None
         message = e
@@ -92,8 +92,10 @@ def create_news(item: Item, db: Session = Depends(get_db)):
 
 
 @app.put("/news")
-def update_news(item: Item, db: Session = Depends(get_db)):
+def update_news(item: schemas.Item, db: Session = Depends(get_db)):
     try:
+        logging.info(item)
+
         is_updated = db.query(News).filter(News.seq == item.seq).update({
             News.journal_id: item.journal_id,
             News.title: item.title,
@@ -117,11 +119,13 @@ def update_news(item: Item, db: Session = Depends(get_db)):
                 str(item.seq)
             status = False
             data = None
+        
+        logging.info(message)
     except Exception as e:
+        logging.error(e)
         status = False
         data = None
         message = e
-        print("Error : ", e)
 
     return Response(status, message, data)
 
@@ -131,6 +135,8 @@ def delete_news(seq: int, db: Session = Depends(get_db)):
     data = None
 
     try:
+        logging.info("seq : {}".format(str(seq)))
+
         status = True
         
         is_deleted = db.query(News).filter(News.seq == seq).delete()
@@ -141,7 +147,10 @@ def delete_news(seq: int, db: Session = Depends(get_db)):
         else:
             message = "News not updated. No product found with this seq :" + \
                 str(seq)    
+        
+        logging.info(message)
     except Exception as e:
+        logging.error(e)
         status = False
         message = e
 

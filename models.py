@@ -1,5 +1,5 @@
 from sqlalchemy import Column, String, Integer, TEXT, DATETIME
-from db.session import Base
+from db.database import Base
 from sqlalchemy.sql import func
 
 class News(Base):
